@@ -1,0 +1,105 @@
+{
+  "date": "2026-10-24",
+  "environment": "pinode2 Raspberry Pi 5 arm64; Node v22.22.2; Chromium headless with SwiftShader; 640x480 x2",
+  "physicsOnly": {
+    "platform": "arm64",
+    "node": "v22.22.2",
+    "blocks": 354,
+    "baseline": {
+      "medianMs": 0.7072939999999903,
+      "p95Ms": 1.058478000000008,
+      "maxMs": 7.801252000000005,
+      "peakActive": 0,
+      "end": {
+        "supported": 354,
+        "active": 0,
+        "sleeping": 0,
+        "detached": 0,
+        "brokenBonds": 0,
+        "totalBonds": 588,
+        "projectiles": 0,
+        "physicsMs": 0.7145709999999781,
+        "steps": 120,
+        "droppedTime": 0
+      }
+    },
+    "destruction": {
+      "medianMs": 0.6657759999999371,
+      "p95Ms": 3.1210080000000175,
+      "maxMs": 16.41818599999999,
+      "peakActive": 13,
+      "end": {
+        "supported": 341,
+        "active": 0,
+        "sleeping": 13,
+        "detached": 13,
+        "brokenBonds": 29,
+        "totalBonds": 588,
+        "projectiles": 0,
+        "physicsMs": 0.6696090000000368,
+        "steps": 720,
+        "droppedTime": 0
+      }
+    }
+  },
+  "browser": {
+    "normal": {
+      "fps": 15.277379926559792,
+      "physics": {
+        "supported": 346,
+        "active": 2,
+        "sleeping": 8,
+        "detached": 10,
+        "brokenBonds": 23,
+        "totalBonds": 588,
+        "projectiles": 0,
+        "physicsMs": 0.7999992370605469,
+        "steps": 234,
+        "droppedTime": 2.9452999992370597,
+        "movedBlocks": 2,
+        "fallenBlocks": 2
+      },
+      "fragments": 47,
+      "particles": 88,
+      "renderSamples": {
+        "medianMs": 2.5,
+        "p95Ms": 10.699999809265137,
+        "count": 58
+      },
+      "physicsSamples": {
+        "medianMs": 1.1999998092651367,
+        "p95Ms": 3.59999942779541,
+        "count": 58
+      }
+    },
+    "stress": {
+      "fps": 2.635972233542269,
+      "physics": {
+        "supported": 346,
+        "active": 2,
+        "sleeping": 8,
+        "detached": 10,
+        "brokenBonds": 23,
+        "totalBonds": 588,
+        "projectiles": 0,
+        "physicsMs": 1.8999996185302734,
+        "steps": 275,
+        "droppedTime": 4.26529999923706,
+        "movedBlocks": 2,
+        "fallenBlocks": 2
+      },
+      "fragments": 20000,
+      "particles": 70,
+      "renderSamples": {
+        "medianMs": 2.1999998092651367,
+        "p95Ms": 7.09999942779541,
+        "count": 66
+      },
+      "physicsSamples": {
+        "medianMs": 1.1999998092651367,
+        "p95Ms": 3.40000057220459,
+        "count": 66
+      }
+    }
+  }
+}

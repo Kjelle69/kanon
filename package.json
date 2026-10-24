@@ -1,6 +1,6 @@
 {
   "name": "kanon",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "",
   "main": "index.js",
   "directories": {
@@ -9,12 +9,15 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "assets": "python3 scripts/prepare-assets.py",
+    "benchmark:physics": "node scripts/benchmark-physics.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "cannon-es": "0.20.0",
     "express": "^5.3.0",
     "three": "0.180.0",
     "ws": "^8.22.0"

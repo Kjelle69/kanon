@@ -1,19 +1,14 @@
-# Streaminglab 0.1 integration i Kanon v0.3
+# Spelintegration v0.4
 
-- `/`: normalt spelflöde via matchkod. lobby.js importerar streaminglab.js innan knapparna aktiveras.
-- `streaminglab.js`: originalets CannonScene, med adapter och livscykelstädning. Ingen PeerConnection skapas här.
-- `/game/index.html`: hänvisning till lobbyn.
-- `/game/diagnostic.html`: originalets manuella signaling i separat flik. diagnostic.js skapar den anslutning som enbart används i det läget.
-- `/vendor/`: samma Three.js 0.180.0 som originalet använde, nu lokalt.
+- `streaminglab.js`: roller, tangent-/pekstyrning och befintligt KanonGame-gränssnitt mot lobbyn.
+- `scene.js`: hostens CannonScene, två 640×480-kameror, rendering och modell-/effektkoppling.
+- `models.js`: lokala GLTFLoader/FBXLoader, källmodellens kalibrering, pivot och mynning.
+- `physics.js`: fast 60 Hz Cannon-es, svepta projektiltester, stöd-/lastgraf och rigidbody-ras.
+- `effects.js`: poolade partiklar, kosmetiskt splitter och lokala träbränder.
+- `/game/diagnostic.html`: äldre Streaminglab 0.1 med manuell signaling. Detta är en separat regressionsdiagnostik, inte v0.4-motorn.
 
-Adapter window.KanonGame:
-- start({role, sendInput}): startar bara hos host en ny CannonScene; gästen visar video och kontroller.
-- getGuestStream(): hostens previewCanvas.captureStream(30), kamera B, 640×480.
-- onInput(command): hostens validerade mottagning av key/ammo/fire för spelare 2.
-- onReady(): gästen skickar vald ammunition när styrkanalen öppnats.
-- onDisconnect(): stoppar animation, stream och GPU-resurser samt återställer input/roll/UI.
-- snapshot(): diagnostisk ögonblicksbild utan skrivbar referens till motorn.
+lobby.js äger fortfarande normalflödets enda RTCPeerConnection och DataChannel. Kamera B fångas från previewCanvas.captureStream(30) och läggs på den anslutningen innan offer. Gästen kör ingen simulering; endast hosten skapar CannonScene. Ingen spelvideo eller fysik passerar serverns API.
 
-lobby.js äger den enda PeerConnection, DataChannel och signaling i normalflödet. Den lägger gästströmmen på anslutningen före offer och kopplar mottagna styrkommandon till onInput. Spelkommandon går aldrig via WebSocket-servern.
+Adapter window.KanonGame har kvar start, getGuestStream, onInput, onReady, onDisconnect och snapshot. Snapshot ger kopierad diagnostik, inklusive modeller, mynningar, rigidbody-/strukturstatistik och effekter.
 
-Originalfilen finns i projektets backup under backups/ (utanför public/).
+Se projektets docs/v0.4.md för approximationer, modellförberedelse, tester och begränsningar. Git-taggen v0.3-stable bevarar föregående motor.
