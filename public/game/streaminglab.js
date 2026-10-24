@@ -1,0 +1,77 @@
+import * as THREE from '/vendor/three.module.js';
+const $=id=>document.getElementById(id);
+let role=null, game=null, stream=null, keys={}, ammo='heavy', sendInput=()=>{}, inputWindow=0, inputCount=0;
+const H=$('hostCanvas'), P=$('previewCanvas'), V=$('remote');
+const controlKeys=new Set(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright']);
+function createRenderer(canvas){return new THREE.WebGLRenderer({canvas,antialias:false,powerPreference:'high-performance',preserveDrawingBuffer:false})}
+function controls(){
+ H.hidden=role!=='host';P.hidden=role!=='host';V.hidden=role!=='guest';
+ $('screenTitle').textContent=role==='host'?'Spelare 1 · kamera A':role==='guest'?'Spelare 2 · kamera B':'Skapa eller anslut till ett spel';
+ for(const id of ['fireBtn','lightBtn','heavyBtn'])$(id).disabled=!role;
+ $('stressBtn').hidden=role!=='host';$('previewPanel').hidden=role!=='host';
+ $('heavyBtn').classList.toggle('accent',ammo==='heavy');$('lightBtn').classList.toggle('accent',ammo==='light');
+}
+function fire(){if(role==='host')game?.fire(0);else if(role==='guest')sendInput({type:'fire'})}
+function setAmmo(value){ammo=value;if(role==='host'&&game)game.ammo[0]=ammo;else if(role==='guest')sendInput({type:'ammo',ammo});controls()}
+function releaseKeys(){
+ for(const key of controlKeys)if(keys[key]&&role==='guest')sendInput({type:'key',key,down:false});
+ for(const key of controlKeys)delete keys[key];
+}
+function acceptInput(m){
+ if(role!=='host'||!game||!m||typeof m!=='object')return;
+ const now=performance.now();if(now-inputWindow>1000){inputWindow=now;inputCount=0}if(++inputCount>120)return;
+ if(m.type==='key'&&controlKeys.has(m.key)&&typeof m.down==='boolean')keys['g:'+m.key]=m.down;
+ else if(m.type==='fire')game.fire(1);
+ else if(m.type==='ammo'&&['light','heavy'].includes(m.ammo))game.ammo[1]=m.ammo;
+}
+function disconnect(){
+ releaseKeys();keys={};stream?.getTracks().forEach(t=>t.stop());stream=null;
+ game?.dispose();game=null;role=null;ammo='heavy';sendInput=()=>{};inputCount=0;inputWindow=0;
+ $('stats').textContent='Ingen aktiv match.';$('fps').textContent='– fps';controls();
+}
+window.KanonGame={
+ start({role:nextRole,sendInput:sender}){disconnect();role=nextRole;sendInput=sender;$('stats').textContent=role==='guest'?'Kamera B från hosten · styrkommandon via DataChannel.':'Startar hostens simulering…';controls();if(role==='host'){game=new CannonScene(H,P);H.focus()}},
+ getGuestStream(){if(role!=='host'||!game)throw Error('Hostens scen saknas');stream=P.captureStream(30);return stream},
+ onInput:acceptInput,
+ onReady(){if(role==='guest')sendInput({type:'ammo',ammo})},
+ onDisconnect:disconnect,
+ // Read-only snapshots for diagnostics; simulation remains exclusively on the host.
+ snapshot(){return {role,hasSimulation:!!game,aim:game?.aim.map(a=>({...a})),ammo:game?[...game.ammo]:null,shots:game?[...game.lastShot]:null,destroyed:game?[...game.counts]:null,fragments:game?.rubble.length,projectiles:game?.projectiles.length,keys:{...keys},renderSize:[H.width,H.height,P.width,P.height],streamLive:stream?.getVideoTracks()[0]?.readyState==='live'}}
+};
+$('fireBtn').onclick=fire;$('lightBtn').onclick=()=>setAmmo('light');$('heavyBtn').onclick=()=>setAmmo('heavy');$('stressBtn').onclick=()=>{if(role==='host')game?.stress()};
+document.addEventListener('keydown',e=>{
+ if(!role||['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)||e.target.isContentEditable)return;
+ const key=e.key.toLowerCase();if(!controlKeys.has(key)&&key!==' ')return;if(key===' '&&e.target.tagName==='BUTTON')return;e.preventDefault();
+ if(key===' '){if(!e.repeat)fire();return}if(keys[key])return;keys[key]=true;
+ if(role==='guest')sendInput({type:'key',key,down:true});
+});
+document.addEventListener('keyup',e=>{const key=e.key.toLowerCase();if(!controlKeys.has(key))return;keys[key]=false;if(role==='guest')sendInput({type:'key',key,down:false})});
+window.addEventListener('blur',releaseKeys);document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseKeys()});
+controls();
+class CannonScene{
+constructor(canvA,canvB){this.rendererA=createRenderer(canvA);this.rendererB=createRenderer(canvB);for(const r of [this.rendererA,this.rendererB]){r.setSize(640,480,false);r.setPixelRatio(1);r.outputColorSpace=THREE.SRGBColorSpace;r.setClearColor(0x8daab9)}this.scene=new THREE.Scene();this.scene.fog=new THREE.Fog(0x8daab9,55,110);this.scene.background=new THREE.Color(0x8daab9);this.scene.add(new THREE.HemisphereLight(0xcdeaff,0x555036,2.1));let sun=new THREE.DirectionalLight(0xffe2b3,2.2);sun.position.set(-12,22,14);this.scene.add(sun);let ground=new THREE.Mesh(new THREE.PlaneGeometry(140,110),new THREE.MeshLambertMaterial({color:0x496747}));ground.rotation.x=-Math.PI/2;ground.position.y=-.2;this.scene.add(ground);this.geometry=new THREE.BoxGeometry(1.04,.73,.91);this.stones=[];this.staticGroup=new THREE.Group();this.scene.add(this.staticGroup);this.rubble=[];this.projectiles=[];this.cannons=[];this.aim=[{yaw:0,up:.24},{yaw:0,up:.24}];this.ammo=['heavy','heavy'];this.lastShot=[-100,-100];this.counts=[0,0];this.particles=null;this.poolCount=0;this.activeParticleCount=0;
+for(let p=0;p<2;p++){this.buildCastle(p);this.buildCannon(p)}this.cameras=[0,1].map(p=>{const camera=new THREE.PerspectiveCamera(68,4/3,.1,150);let x=p===0?-21:21;camera.position.set(x,5.8,9);return camera});this.clock=0;this.tick=0;this.totalFrames=0;this.lastStats=0;this.render();}
+mat(c){return new THREE.MeshLambertMaterial({color:c,flatShading:true})}
+buildCastle(owner){const sign=owner===0?-1:1,c=owner===0?0x8d958f:0xa68f7c;const mat=this.mat(c);const add=(x,y,z,dx=1.08,dy=.75,dz=.98)=>{const m=new THREE.Mesh(this.geometry,mat);m.position.set(x,y,z);m.scale.set(dx,dy,dz);m.userData={hp:1,owner,active:true};this.staticGroup.add(m);this.stones.push(m)};for(let iz=-6;iz<=6;iz++){for(let iy=0;iy<8;iy++){if(Math.abs(iz)<=1&&iy<=2)continue;add(sign*11.9,.36+iy*.75,iz*.98)}}for(let j=0;j<7;j++)for(let iy=0;iy<6;iy++){add(sign*(12.0+j*1.02),.36+iy*.75,-6.8);add(sign*(12.0+j*1.02),.36+iy*.75,6.8)}for(let iz=-6;iz<=6;iz+=2){add(sign*11.9,6.45,iz*.98,1.05,.65,1.1)}const plinth=new THREE.Mesh(new THREE.CylinderGeometry(2.1,2.5,1,10),this.mat(0x4e5052));plinth.position.set(sign*18,.3,0);this.scene.add(plinth)}
+buildCannon(p){let sign=p===0?1:-1,origin=new THREE.Group();origin.position.set(p===0?-18:18,1.25,0);this.scene.add(origin);let base=new THREE.Mesh(new THREE.BoxGeometry(2.9,.8,1.6),this.mat(0x544639));origin.add(base);let barrel=new THREE.Mesh(new THREE.CylinderGeometry(.39,.59,3.8,9),this.mat(0x33383e));barrel.rotation.z=-Math.PI/2;barrel.position.x=sign*1.65;origin.add(barrel);origin.userData.barrel=barrel;this.cannons.push(origin)}
+getDirection(p){const sign=p===0?1:-1;const {yaw,up}=this.aim[p];let x=sign*Math.cos(yaw)*Math.cos(up),y=Math.sin(up),z=Math.sin(yaw)*Math.cos(up);return new THREE.Vector3(x,y,z).normalize()}
+fire(p){let now=performance.now()/1000,rate=this.ammo[p]==='light'?2:6;if(now-this.lastShot[p]<rate)return;this.lastShot[p]=now;const dir=this.getDirection(p),start=this.cannons[p].position.clone().addScaledVector(dir,3.1);start.y+=.5;let ball=new THREE.Mesh(new THREE.SphereGeometry(this.ammo[p]==='light'?.22:.44,10,8),this.mat(this.ammo[p]==='light'?0xe2c78b:0x242a2d));ball.position.copy(start);this.scene.add(ball);this.projectiles.push({mesh:ball,vel:dir.multiplyScalar(this.ammo[p]==='light'?32:28),owner:p,type:this.ammo[p],life:0});}
+breakStone(s,hit,type){if(!s.userData.active)return;this.staticGroup.remove(s);s.userData.active=false;this.counts[s.userData.owner]++;if(type==='light')return;let n=type==='heavy'?17:6;for(let i=0;i<n;i++){let v=new THREE.Vector3((Math.random()-.5)*8,1+Math.random()*7,(Math.random()-.5)*8);this.spawnParticle(s.position,v,Math.random()*.18+.09)}}
+spawnParticle(pos,vel,size){if(!this.particles)this.initParticles(4000);if(this.activeParticleCount>=this.poolCount)return;const i=this.activeParticleCount++;const p={i,pos:pos.clone(),v:vel.clone(),rot:Math.random()*6,size:size||.17,live:5+Math.random()*3};this.rubble.push(p);this.updateInstance(p);this.particles.count=this.activeParticleCount;}
+initParticles(n){const geo=new THREE.IcosahedronGeometry(1,0),mat=this.mat(0xb1a394);this.particles=new THREE.InstancedMesh(geo,mat,n);this.particles.instanceMatrix.setUsage(THREE.DynamicDrawUsage);this.particles.count=0;this.poolCount=n;this.scene.add(this.particles);this.temp=new THREE.Object3D();}
+updateInstance(p){this.temp.position.copy(p.pos);this.temp.scale.setScalar(p.size);this.temp.rotation.set(p.rot,p.rot*.7,p.rot*.4);this.temp.updateMatrix();this.particles.setMatrixAt(p.i,this.temp.matrix)}
+stress(){if(!this.particles)this.initParticles(20000);if(this.poolCount<20000){this.scene.remove(this.particles);this.rubble=[];this.activeParticleCount=0;this.initParticles(20000)}while(this.activeParticleCount<20000){const pos=new THREE.Vector3((Math.random()-.5)*35,3+Math.random()*19,(Math.random()-.5)*18);this.spawnParticle(pos,new THREE.Vector3((Math.random()-.5)*3,Math.random()*2,(Math.random()-.5)*3),.08)}this.particles.instanceMatrix.needsUpdate=true;}
+impact(ball,stone){let pos=ball.mesh.position.clone();if(ball.type==='light'){return;}let radius=ball.type==='heavy'?2.5:1.5;for(const s of this.stones){if(!s.userData.active)continue;if(s.position.distanceTo(pos)<radius)this.breakStone(s,pos,ball.type)}}
+step(dt){this.clock+=dt;this.tick++;for(let p=0;p<2;p++){let k=p===0?x=>keys[x]:x=>keys['g:'+x];let az=Number(!!(k('d')||k('arrowright')))-Number(!!(k('a')||k('arrowleft')));let el=Number(!!(k('w')||k('arrowup')))-Number(!!(k('s')||k('arrowdown')));this.aim[p].yaw=THREE.MathUtils.clamp(this.aim[p].yaw+az*dt*.55,-.58,.58);this.aim[p].up=THREE.MathUtils.clamp(this.aim[p].up+el*dt*.35,-.08,.58);let dir=this.getDirection(p);this.cameras[p].lookAt(this.cameras[p].position.clone().add(new THREE.Vector3(dir.x*30,-3+dir.y*3,dir.z*30-8)));this.cannons[p].rotation.y=-this.aim[p].yaw*(p===0?1:-1);this.cannons[p].userData.barrel.rotation.z=(p===0?-1:1)*(Math.PI/2-this.aim[p].up);}
+for(let i=this.projectiles.length-1;i>=0;i--){const b=this.projectiles[i],prev=b.mesh.position.clone();b.vel.y-=9.81*dt;b.mesh.position.addScaledVector(b.vel,dt);b.life+=dt;let stone=null;for(const s of this.stones){if(!s.userData.active||s.userData.owner===b.owner)continue;if(Math.abs(b.mesh.position.x-s.position.x)<.85&&Math.abs(b.mesh.position.y-s.position.y)<.62&&Math.abs(b.mesh.position.z-s.position.z)<.75){stone=s;break}}if(stone)this.impact(b,stone);if(stone||b.mesh.position.y<0||b.life>8){this.scene.remove(b.mesh);this.projectiles.splice(i,1)}}
+for(const p of this.rubble){if(p.live<=0)continue;p.live-=dt;p.v.y-=9.81*dt;p.pos.addScaledVector(p.v,dt);if(p.pos.y<p.size){p.pos.y=p.size;p.v.y*=-.24;p.v.x*=.75;p.v.z*=.75;if(p.v.length()<.4)p.live=0}p.rot+=dt*2;this.updateInstance(p)}if(this.particles&&this.rubble.length)this.particles.instanceMatrix.needsUpdate=true;}
+render(){let old=performance.now();if(!this.prev)this.prev=old;let dt=Math.min((old-this.prev)/1000,.05);this.prev=old;this.step(dt);this.rendererA.render(this.scene,this.cameras[0]);this.rendererB.render(this.scene,this.cameras[1]);this.totalFrames++;if(old-this.lastStats>1000){$('fps').textContent=(this.totalFrames*1000/(old-this.lastStats||1000)).toFixed(0)+' fps';$('stats').textContent=`Fysiska väggstenar kvar: ${this.stones.filter(s=>s.userData.active).length} · förstörda: ${this.counts[0]+this.counts[1]}\nAktiva visuella stenfragment: ${this.rubble.filter(r=>r.live>0).length} · pool: ${this.poolCount}\nRenderingsupplösning: 2 × 640×480 · host laddar båda kamerorna\nSenaste skott: ${this.ammo[0]} (host), ${this.ammo[1]} (gäst)\nWebRTC: ${window.KanonLobby?.connectionState || 'ej ansluten'}`;this.totalFrames=0;this.lastStats=old}this.raf=requestAnimationFrame(()=>this.render())}
+dispose(){
+ cancelAnimationFrame(this.raf);
+ const geometries=new Set(), materials=new Set();
+ const collect=o=>{if(o.geometry)geometries.add(o.geometry);if(o.material)for(const m of (Array.isArray(o.material)?o.material:[o.material]))materials.add(m)};
+ this.scene.traverse(collect);this.stones.forEach(collect);
+ geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());
+ this.rendererA.dispose();this.rendererB.dispose();this.scene.clear();
+}
+}

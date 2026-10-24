@@ -1,0 +1,10 @@
+node_modules/
+.env
+*.log
+
+backups/
+test-results/
+playwright-report/
+
+# Local shell artifact
+/curl

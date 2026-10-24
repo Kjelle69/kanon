@@ -1,0 +1,13 @@
+tunnel: b3d7d2fd-fd40-4594-9fb8-2e8474b1e3b3
+credentials-file: /home/kjelle/.cloudflared/b3d7d2fd-fd40-4594-9fb8-2e8474b1e3b3.json
+
+ingress:
+  - hostname: malmbanan.mtecproductions.se
+    service: http://localhost:8010
+  - hostname: solsim.mtecproductions.se
+    service: http://localhost:8787
+  - hostname: lifemap.mtecproductions.se
+    service: http://localhost:8085
+  - hostname: kanon.mtecproductions.se
+    service: http://127.0.0.1:8080
+  - service: http_status:404

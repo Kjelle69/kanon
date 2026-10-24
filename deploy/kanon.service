@@ -1,0 +1,27 @@
+[Unit]
+Description=Kanon Lobby v0.2
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kjelle
+Group=kjelle
+WorkingDirectory=/home/kjelle/servers/kanon
+Environment=NODE_ENV=production
+EnvironmentFile=-/home/kjelle/servers/kanon/.env
+ExecStart=/usr/bin/node /home/kjelle/servers/kanon/server.js
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+RestrictSUIDSGID=true
+UMask=0077
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
