@@ -8,6 +8,10 @@ test("v0.4 host: muzzle, recoil, enemy breach, rigid rubble, fire and cosmetic b
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
   await page.locator("#create").click();
+  await expect(page.locator("#interactBtn")).toBeEnabled();
+  await page.locator("#interactBtn").click();
+  // Solo regression fixture: enable combat without a second browser.
+  await page.evaluate(() => window.KanonGame.onReady());
   const snap = () => page.evaluate(() => window.KanonGame.snapshot());
   await expect
     .poll(
@@ -88,6 +92,10 @@ test("touch controls work in a phone-sized browser and release on pointer cancel
   try {
     await page.goto("/");
     await page.locator("#create").click();
+    await expect(page.locator("#interactBtn")).toBeEnabled();
+    await page.locator("#interactBtn").click();
+    // Solo regression fixture: enable combat without a second browser.
+    await page.evaluate(() => window.KanonGame.onReady());
     await page.locator('[data-key="d"]').scrollIntoViewIfNeeded();
     const b = await page.locator('[data-key="d"]').boundingBox();
     const session = await context.newCDPSession(page);

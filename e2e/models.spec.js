@@ -41,3 +41,29 @@ test("supplied GLB loads with original textures and two articulated cannon insta
   expect(result.a[1]).toBeCloseTo(result.b[1]);
   expect(errors).toEqual([]);
 });
+
+test("Mr Trebuchet is normalized to a grounded human scale and cannonball GLB is available", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const model = await page.evaluate(async () => {
+    const { loadCharacter, loadModels } = await import("/game/models.js");
+    const THREE = await import("/vendor/three.module.js");
+    const asset = await loadCharacter(),
+      ball = await loadModels();
+    const box = new THREE.Box3().setFromObject(asset.root),
+      size = box.getSize(new THREE.Vector3());
+    return {
+      height: size.y,
+      minY: box.min.y,
+      url: asset.url,
+      ball: ball.ballStatus,
+      clonesDistinct: asset.root.clone(true) !== asset.root,
+    };
+  });
+  expect(model.height).toBeCloseTo(1.7, 2);
+  expect(model.minY).toBeCloseTo(0, 2);
+  expect(model.url).toContain("MrTreb.glb");
+  expect(model.clonesDistinct).toBe(true);
+  expect(model.ball).toBe("cannonball.glb");
+});

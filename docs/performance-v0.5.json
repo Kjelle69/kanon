@@ -1,0 +1,126 @@
+{
+  "date": "2026-10-26",
+  "environment": "pinode2, Raspberry Pi 5 arm64, Node v22.22.2; Chromium headless/SwiftShader, two contexts, video and audio RTP",
+  "physicsOnly": {
+    "platform": "arm64",
+    "node": "v22.22.2",
+    "blocks": 354,
+    "characters": {
+      "players": [
+        {
+          "id": 0,
+          "hp": 100,
+          "alive": true,
+          "lastDamage": null,
+          "position": {
+            "x": -20.2,
+            "y": 0.8499215199999997,
+            "z": 1.8
+          },
+          "eye": {
+            "x": -20.2,
+            "y": 1.5499215199999998,
+            "z": 1.8
+          },
+          "yaw": 0.1,
+          "pitch": 0,
+          "mounted": false,
+          "grounded": true
+        },
+        {
+          "id": 1,
+          "hp": 99.1441797547577,
+          "alive": true,
+          "lastDamage": {
+            "amount": 0.8558202452422933,
+            "cause": "blast",
+            "time": 2.3833333333333298
+          },
+          "position": {
+            "x": 20.2,
+            "y": 0.8499215199999997,
+            "z": 1.8
+          },
+          "eye": {
+            "x": 20.2,
+            "y": 1.5499215199999998,
+            "z": 1.8
+          },
+          "yaw": 3.041592653589793,
+          "pitch": 0,
+          "mounted": false,
+          "grounded": true
+        }
+      ],
+      "ended": false,
+      "winner": null
+    },
+    "baseline": {
+      "medianMs": 1.5751080000000002,
+      "p95Ms": 3.232328000000024,
+      "maxMs": 16.316880999999995,
+      "peakActive": 0,
+      "end": {
+        "supported": 354,
+        "active": 0,
+        "sleeping": 0,
+        "detached": 0,
+        "brokenBonds": 0,
+        "totalBonds": 588,
+        "projectiles": 0,
+        "physicsMs": 1.480495000000019,
+        "steps": 120,
+        "droppedTime": 0
+      }
+    },
+    "destruction": {
+      "medianMs": 1.0348800000000438,
+      "p95Ms": 3.4358850000000416,
+      "maxMs": 18.45149399999997,
+      "peakActive": 13,
+      "end": {
+        "supported": 341,
+        "active": 0,
+        "sleeping": 13,
+        "detached": 13,
+        "brokenBonds": 29,
+        "totalBonds": 588,
+        "projectiles": 0,
+        "physicsMs": 0.9876950000000306,
+        "steps": 720,
+        "droppedTime": 0
+      }
+    }
+  },
+  "browserMatchEnd": {
+    "fps": 7.635044854498693,
+    "ended": true,
+    "renderCpu": {
+      "medianMs": 2.5,
+      "p95Ms": 6,
+      "samples": 180
+    },
+    "lastPhysicsStepPerFrame": {
+      "medianMs": 2.9000000953674316,
+      "p95Ms": 7,
+      "samples": 180
+    },
+    "physics": {
+      "supported": 356,
+      "active": 0,
+      "sleeping": 0,
+      "detached": 0,
+      "brokenBonds": 0,
+      "totalBonds": 588,
+      "projectiles": 0,
+      "physicsMs": 8.40000057220459,
+      "steps": 1915,
+      "droppedTime": 6.195200001716612,
+      "movedBlocks": 0,
+      "fallenBlocks": 0
+    },
+    "audioContext": "running",
+    "capsules": 2,
+    "activePeerConnectionsPerClient": 1
+  }
+}

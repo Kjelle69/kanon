@@ -1,14 +1,18 @@
-# Spelintegration v0.4
+# Hostmotor och lobbyadapter v0.5
 
-- `streaminglab.js`: roller, tangent-/pekstyrning och befintligt KanonGame-gränssnitt mot lobbyn.
-- `scene.js`: hostens CannonScene, två 640×480-kameror, rendering och modell-/effektkoppling.
-- `models.js`: lokala GLTFLoader/FBXLoader, källmodellens kalibrering, pivot och mynning.
-- `physics.js`: fast 60 Hz Cannon-es, svepta projektiltester, stöd-/lastgraf och rigidbody-ras.
-- `effects.js`: poolade partiklar, kosmetiskt splitter och lokala träbränder.
-- `/game/diagnostic.html`: äldre Streaminglab 0.1 med manuell signaling. Detta är en separat regressionsdiagnostik, inte v0.4-motorn.
+Normalflödets enda PeerConnection ägs av lobby.js. Den transporterar kamera B, separat spelljud, reserverad valfri röst och DataChannel. Servern hanterar endast statiska filer, lobby och offer/answer/ICE.
 
-lobby.js äger fortfarande normalflödets enda RTCPeerConnection och DataChannel. Kamera B fångas från previewCanvas.captureStream(30) och läggs på den anslutningen innan offer. Gästen kör ingen simulering; endast hosten skapar CannonScene. Ingen spelvideo eller fysik passerar serverns API.
+- streaminglab.js: input, muslås/touch, HUD, validering, befintligt KanonGame-gränssnitt.
+- scene.js: två förstapersonskameror och hostens gemensamma scen. Egen karaktär döljs per renderpass.
+- characters.js: kapselkroppar, gång/look, bemanning, markkontakt och spelplansgränser.
+- damage.js: hostens enda HP-/skadesystem och matchresultat.
+- physics.js/effects.js: bevarad ballistik, strukturellt ras och kosmetiska effekter.
+- models.js: kanon, kula och Mr Trebuchet, med separat fysikproxy.
+- audio.js: virtuella lyssnare och lokalt/fjärran spelljud. voice.js: mikrofon, PTT och städning.
+- ui.js: en åtgärd per touchtryck, fortsatt mus-/tangentbordsstöd.
 
-Adapter window.KanonGame har kvar start, getGuestStream, onInput, onReady, onDisconnect och snapshot. Snapshot ger kopierad diagnostik, inklusive modeller, mynningar, rigidbody-/strukturstatistik och effekter.
+KanonGame.start/getGuestStream/onInput/onReady/onDisconnect/snapshot finns kvar. onState uppdaterar gästens HUD. På hosten skapar start en CannonScene; på gästen ingen simulering. getGuestStream innehåller kamera B och dess spelljud. Guest motion innehåller axlar/look, aldrig position eller skada. Host state är en liten auktoritativ HUD-rapport, inte en extra fysiksimulering.
 
-Se projektets docs/v0.4.md för approximationer, modellförberedelse, tester och begränsningar. Git-taggen v0.3-stable bevarar föregående motor.
+/game/diagnostic.html är oförändrad äldre Streaminglab 0.1 med manuell signaling, utan v0.5-karaktärer eller röst. Använd normalflödet för de nya funktionerna.
+
+Se docs/v0.5.md och taggen v0.4-stable för återställningsbar föregående implementation.

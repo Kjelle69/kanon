@@ -50,6 +50,9 @@ test("real video, central simulation, concurrent controls, teardown and rematch"
         { timeout: 45000 },
       )
       .toBe(true);
+    await h.locator("#interactBtn").click();
+    await g.locator("#interactBtn").click();
+    await expect(g.locator("#fireBtn")).toBeEnabled();
     expect((await snapshot(h)).hasSimulation).toBe(true);
     expect((await snapshot(g)).hasSimulation).toBe(false);
     expect((await snapshot(h)).renderSize).toEqual([640, 480, 640, 480]);

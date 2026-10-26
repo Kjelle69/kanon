@@ -1,6 +1,6 @@
 {
   "name": "kanon",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "",
   "main": "index.js",
   "directories": {
@@ -11,7 +11,8 @@
     "test": "node --test",
     "test:e2e": "playwright test",
     "assets": "python3 scripts/prepare-assets.py",
-    "benchmark:physics": "node scripts/benchmark-physics.mjs"
+    "benchmark:physics": "node scripts/benchmark-physics.mjs",
+    "benchmark:characters": "node scripts/benchmark-physics.mjs --characters"
   },
   "keywords": [],
   "author": "",

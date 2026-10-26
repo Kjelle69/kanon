@@ -1,12 +1,16 @@
 import * as THREE from "/vendor/three.module.js";
 import { DestructionWorld, FIXED_DT, AMMO } from "./physics.js";
 import { loadModels, createCannonVisual } from "./models.js";
+import { Characters, CHARACTER } from "./characters.js";
+import { loadCharacter } from "./models.js";
+import { SoundMixer } from "./audio.js";
 import { Effects } from "./effects.js";
 const $ = (id) => document.getElementById(id);
 export class CannonScene {
   constructor(canvasA, canvasB, input) {
     this.input = input;
     this.disposed = false;
+    this.combatEnabled = false;
     this.aim = [
       { yaw: 0.1, up: 0.24 },
       { yaw: 0.1, up: 0.24 },
@@ -51,14 +55,59 @@ export class CannonScene {
     ground.position.y = -0.03;
     this.scene.add(ground);
     this.effects = new Effects(this.scene);
+    this.audio = new SoundMixer();
     this.physics = new DestructionWorld({ onEvent: (e) => this.event(e) });
-    this.physics.beforeStep = () => this.updateCannons(FIXED_DT);
+    this.physics.beforeStep = () => {
+      this.characters.beforeStep(FIXED_DT, this.input());
+      this.updateCannons(FIXED_DT);
+    };
     this.cannons = [0, 1].map((p) => this.fallbackCannon(p));
     this.wood = [];
     this.buildCastle(0);
     this.buildCastle(1);
     this.physics.connect();
     this.buildInstances();
+    this.characters = new Characters(this.physics, {
+      onDamage: (id) => {
+        this.shake[id] = 0.12;
+      },
+    });
+    this.physics.characters = this.characters;
+    for (const sign of [-1, 1]) {
+      const deck = new THREE.Mesh(
+        new THREE.BoxGeometry(1.4, 0.75, 1.6),
+        this.material(0x6b5135),
+      );
+      deck.position.set(sign * 21.1, 0.375, 0);
+      this.scene.add(deck);
+    }
+    this.characterModels = [0, 1].map((id) => {
+      const root = new THREE.Mesh(
+        new THREE.CapsuleGeometry(0.3, 1.1, 4, 8),
+        this.material(id === 0 ? 0x426ab3 : 0xb36a42),
+      );
+      root.userData.fallbackCharacter = true;
+      this.scene.add(root);
+      return root;
+    });
+    this.characterState = "Laddar Mr Trebuchet";
+    this.characterReady = loadCharacter()
+      .then((asset) => {
+        if (this.disposed) return;
+        this.characterModels.forEach((old, id) => {
+          this.disposeObject(old);
+          const root = asset.root.clone(true);
+          this.scene.add(root);
+          this.characterModels[id] = root;
+        });
+        this.characterState = asset.url;
+      })
+      .catch((e) => {
+        if (!this.disposed) {
+          this.characterState = "Kapselreserv: " + e.message;
+          console.warn("Karaktär:", e.message);
+        }
+      });
     this.cameras = [0, 1].map((p) => {
       const camera = new THREE.PerspectiveCamera(68, 4 / 3, 0.1, 150);
       camera.position.set(p === 0 ? -22 : 22, 3.6, 3.5);
@@ -186,6 +235,7 @@ export class CannonScene {
       const k = (key) => keys[(p ? "g:" : "") + key];
       const aim = this.aim[p],
         v = this.aimVelocity[p];
+      const operator = this.characters.players[p];
       const yaw =
         (Number(!!(k("d") || k("arrowright"))) -
           Number(!!(k("a") || k("arrowleft")))) *
@@ -195,10 +245,25 @@ export class CannonScene {
           Number(!!(k("s") || k("arrowdown")))) *
         0.35;
       const blend = 1 - Math.exp(-dt * 10);
-      v.yaw += (yaw - v.yaw) * blend;
-      v.up += (up - v.up) * blend;
+      const axis = operator.axes;
+      v.yaw +=
+        ((operator.mounted
+          ? Math.max(-0.55, Math.min(0.55, yaw + axis.x * 0.55))
+          : 0) -
+          v.yaw) *
+        blend;
+      v.up +=
+        ((operator.mounted
+          ? Math.max(-0.35, Math.min(0.35, up + axis.z * 0.35))
+          : 0) -
+          v.up) *
+        blend;
       aim.yaw = THREE.MathUtils.clamp(aim.yaw + v.yaw * dt, -0.58, 0.58);
       aim.up = THREE.MathUtils.clamp(aim.up + v.up * dt, -0.08, 0.58);
+      if (operator.mounted) {
+        operator.yaw = p === 0 ? aim.yaw : Math.PI - aim.yaw;
+        operator.pitch = aim.up;
+      }
       this.recoil[p] *= Math.exp(-dt * 9);
       this.shake[p] *= Math.exp(-dt * 12);
       const c = this.cannons[p];
@@ -219,6 +284,12 @@ export class CannonScene {
     };
   }
   fire(p) {
+    if (
+      !this.combatEnabled ||
+      !this.characters.players[p].mounted ||
+      this.characters.damage.ended
+    )
+      return false;
     const now = performance.now() / 1000,
       spec = AMMO[this.ammo[p]];
     if (now - this.lastShot[p] < spec.reload) return;
@@ -231,14 +302,39 @@ export class CannonScene {
     };
     this.physics.shoot({ position, direction, owner: p, ammo: this.ammo[p] });
     this.effects.muzzle(position, direction);
+    this.audio.event("shot", position);
     this.recoil[p] = this.ammo[p] === "heavy" ? 0.32 : 0.14;
     this.shake[p] = 0.045;
+  }
+  look(p, x, y) {
+    if (this.characters.damage.ended) return;
+    if (this.characters.players[p].mounted) {
+      this.aim[p].yaw = THREE.MathUtils.clamp(
+        this.aim[p].yaw + (p === 0 ? x : -x),
+        -0.58,
+        0.58,
+      );
+      this.aim[p].up = THREE.MathUtils.clamp(this.aim[p].up + y, -0.08, 0.58);
+    } else this.characters.look(p, x, y);
+  }
+  motion(p, x, z) {
+    this.characters.motion(p, x, z);
+  }
+  interact(p) {
+    return this.characters.interact(p, this.aim[p]);
+  }
+  unlockAudio() {
+    return this.audio.unlock();
+  }
+  getGuestAudioTrack() {
+    return this.audio.track;
   }
   event(e) {
     if (this.disposed) return;
     if (e.type === "detach") {
       if (e.block.owner < 2) this.counts[e.block.owner]++;
     } else if (e.type === "impact") {
+      this.audio?.event("impact", e.point, e.energy);
       this.effects.impact(e.point, e.energy);
       if (e.energy > 10000)
         for (const wood of this.wood)
@@ -247,14 +343,18 @@ export class CannonScene {
             2
           )
             this.effects.ignite(wood.object);
-    } else if (e.type === "collapse") this.effects.collapse(e.point, e.count);
-    else if (e.type === "rubble-impact")
+    } else if (e.type === "collapse") {
+      this.effects.collapse(e.point, e.count);
+      this.audio?.event("collapse", e.point, e.count * 3000);
+    } else if (e.type === "rubble-impact") {
+      if (e.energy > 2000) this.audio?.event("rubble", e.point, e.energy);
       this.effects.emit(
         "dust",
         e.point,
         Math.min(16, Math.round(e.energy / 1500)),
         1,
       );
+    }
   }
   stress() {
     this.effects.stress();
@@ -306,34 +406,48 @@ export class CannonScene {
     const now = performance.now(),
       dt = this.previous ? Math.max(0, (now - this.previous) / 1000) : 0;
     this.previous = now;
-    this.physics.advance(dt);
+    if (!this.characters.damage.ended) this.physics.advance(dt);
+    else
+      this.shake = this.shake.map((s) => s * Math.exp(-Math.min(dt, 0.1) * 12));
     this.visuals();
     this.effects.update(Math.min(dt, 0.1));
+    const state = this.characters.snapshot();
     for (let p = 0; p < 2; p++) {
-      const a = this.aim[p],
-        sign = p === 0 ? 1 : -1,
-        dir = new THREE.Vector3(
-          sign * Math.cos(a.yaw) * Math.cos(a.up),
-          Math.sin(a.up),
-          Math.sin(a.yaw) * Math.cos(a.up),
-        );
-      const camera = this.cameras[p];
-      camera.position.set(
-        p === 0 ? -22 : 22,
-        3.6 + Math.sin(now * 0.08) * this.shake[p],
-        3.5,
-      );
+      const player = state.players[p],
+        camera = this.cameras[p],
+        root = this.characterModels[p];
+      root.position.copy(player.position);
+      if (!root.userData.fallbackCharacter)
+        root.position.y -= CHARACTER.height / 2;
+      root.rotation.y = -player.yaw;
+      camera.position.copy(player.eye);
+      camera.position.y += Math.sin(now * 0.08) * this.shake[p];
       camera.lookAt(
         camera.position
           .clone()
           .add(
-            new THREE.Vector3(dir.x * 30, -1.5 + dir.y * 3, dir.z * 30 - 3.5),
+            new THREE.Vector3(
+              Math.cos(player.yaw) * Math.cos(player.pitch),
+              Math.sin(player.pitch),
+              Math.sin(player.yaw) * Math.cos(player.pitch),
+            ),
           ),
       );
     }
+    this.audio.setListeners(
+      state.players.map((p) => ({ position: p.eye, yaw: p.yaw })),
+    );
+    if (!this.lastState || now - this.lastState > 100) {
+      this.lastState = now;
+      this.onState?.(state);
+    }
     const before = performance.now();
+    this.characterModels[0].visible = false;
     this.renderers[0].render(this.scene, this.cameras[0]);
+    this.characterModels[0].visible = true;
+    this.characterModels[1].visible = false;
     this.renderers[1].render(this.scene, this.cameras[1]);
+    this.characterModels[1].visible = true;
     this.renderMs = performance.now() - before;
     this.renderSamples.push(this.renderMs);
     this.physicsSamples.push(this.physics.lastStepMs);
@@ -349,12 +463,19 @@ export class CannonScene {
       const s = this.physics.stats();
       $("fps").textContent = this.fps.toFixed(0) + " fps";
       $("stats").textContent =
-        `${this.modelState}${this.modelError ? " · " + this.modelError : ""}\nRendering: 2 × 640×480 · ${this.renderMs.toFixed(1)} ms · ${this.fps.toFixed(0)} fps\nFysik: Cannon-es · 60 Hz · ${s.physicsMs.toFixed(2)} ms/steg\nRigidbodies: ${s.active} aktiva · ${s.sleeping} sovande · ${s.supported} burna · ${s.projectiles} kulor\nStrukturförbindelser: ${s.brokenBonds}/${s.totalBonds} brutna\nKosmetiska fragment: ${this.effects.activeFragments}/20000 · partiklar: ${this.effects.active}/2400\nAmmo: ${this.ammo[0]} (host), ${this.ammo[1]} (gäst)\nWebRTC: ${window.KanonLobby?.connectionState || "ej ansluten"} · ${window.KanonLobby?.bitrateKbps?.toFixed(0) || "–"} kbit/s\nTidsbudget: ${s.droppedTime.toFixed(2)} s förkastad vid långa bildrutor`;
+        `${this.modelState}${this.modelError ? " · " + this.modelError : ""}\nRendering: 2 × 640×480 · ${this.renderMs.toFixed(1)} ms · ${this.fps.toFixed(0)} fps\nFysik: Cannon-es · 60 Hz · ${s.physicsMs.toFixed(2)} ms/steg\nRigidbodies: ${s.active} aktiva · ${s.sleeping} sovande · ${s.supported} burna · ${s.projectiles} kulor\nKaraktärer: 2 kapslar · HP ${this.characters.damage.players.map((p) => Math.ceil(p.hp)).join(" / ")}\nStrukturförbindelser: ${s.brokenBonds}/${s.totalBonds} brutna\nKosmetiska fragment: ${this.effects.activeFragments}/20000 · partiklar: ${this.effects.active}/2400\nAmmo: ${this.ammo[0]} (host), ${this.ammo[1]} (gäst)\nWebRTC: ${window.KanonLobby?.connectionState || "ej ansluten"} · ${window.KanonLobby?.bitrateKbps?.toFixed(0) || "–"} kbit/s\nTidsbudget: ${s.droppedTime.toFixed(2)} s förkastad vid långa bildrutor`;
     }
     this.raf = requestAnimationFrame(() => this.render());
   }
   snapshot() {
     return {
+      characters: this.characters.snapshot(),
+      characterModel: this.characterState,
+      audio: this.audio.snapshot(),
+      cameras: this.cameras.map((c) => ({
+        position: c.position.toArray(),
+        direction: c.getWorldDirection(new THREE.Vector3()).toArray(),
+      })),
       aim: this.aim.map((a) => ({ ...a })),
       ammo: [...this.ammo],
       shots: [...this.lastShot],
@@ -418,6 +539,8 @@ export class CannonScene {
   dispose() {
     this.disposed = true;
     cancelAnimationFrame(this.raf);
+    this.characters.dispose();
+    this.audio.dispose();
     this.physics.dispose();
     this.effects.dispose();
     for (const child of [...this.scene.children]) this.disposeObject(child);

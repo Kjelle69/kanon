@@ -1,5 +1,13 @@
 import { DestructionWorld } from "../public/game/physics.js";
+import { Characters } from "../public/game/characters.js";
 const w = new DestructionWorld();
+const characters = process.argv.includes("--characters")
+  ? new Characters(w)
+  : null;
+if (characters) {
+  w.characters = characters;
+  w.beforeStep = () => characters.beforeStep(1 / 60, {});
+}
 for (let p = 0; p < 2; p++) {
   const sign = p === 0 ? -1 : 1;
   for (let z = -6; z <= 6; z++)
@@ -55,6 +63,7 @@ console.log(
       platform: process.arch,
       node: process.version,
       blocks: w.blocks.length,
+      characters: characters?.snapshot(),
       baseline,
       destruction,
     },

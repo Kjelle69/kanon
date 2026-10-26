@@ -1,4 +1,6 @@
 import "./game/streaminglab.js";
+import { bindAction } from "./game/ui.js";
+import { voice } from "./game/voice.js";
 const $ = (id) => document.getElementById(id);
 const create = $("create"),
   join = $("join"),
@@ -65,11 +67,7 @@ function report(s) {
     s.reported = true;
     clearTimeout(s.timer);
     send({ type: "connected" });
-    show(
-      s.role === "host"
-        ? "Spelet är igång. Du styr kanon A."
-        : "Spelet är igång. Du styr kanon B.",
-    );
+    show("Spelet är igång. WASD för att gå, E vid din kanon.");
     if (s.role === "host") state("videoState", "Skickar kamera B · 640 × 480");
     window.KanonGame.onReady();
   }
@@ -93,13 +91,15 @@ function wireChannel(s, c) {
   c.onmessage = (event) => {
     if (
       !active(s) ||
-      s.role !== "host" ||
       typeof event.data !== "string" ||
       event.data.length > 4096
     )
       return;
     try {
-      window.KanonGame.onInput(JSON.parse(event.data));
+      const message = JSON.parse(event.data);
+      if (s.role === "host") window.KanonGame.onInput(message);
+      else if (message.type === "state")
+        window.KanonGame.onState(message.state);
     } catch {
       show("Ogiltigt styrkommando ignorerades.");
     }
@@ -169,8 +169,21 @@ function peer(s) {
     }
   };
   p.ontrack = (e) => {
-    if (!active(s) || s.role !== "guest") return;
-    video.srcObject = e.streams[0] || new MediaStream([e.track]);
+    if (!active(s)) return;
+    if (e.track.kind === "audio") {
+      const audio = p
+        .getTransceivers()
+        .filter((t) => t.receiver.track.kind === "audio");
+      if (e.transceiver === audio.at(-1)) voice.receive(e.track);
+      else if (s.role === "guest") {
+        const output = document.querySelector("#gameAudio");
+        output.srcObject = new MediaStream([e.track]);
+        output.play().catch(() => {});
+      }
+      return;
+    }
+    if (s.role !== "guest") return;
+    video.srcObject = new MediaStream([e.track]);
     state("videoState", "Mottar kamera B");
     e.track.onmute = () => {
       if (active(s)) state("videoState", "Väntar på videodata");
@@ -246,7 +259,13 @@ async function message(m) {
     const p = peer(s);
     wireChannel(s, p.createDataChannel("controls", { ordered: true }));
     s.stream = window.KanonGame.getGuestStream();
-    for (const track of s.stream.getTracks()) p.addTrack(track, s.stream);
+    for (const track of s.stream.getTracks()) {
+      if (track.kind === "audio")
+        p.addTransceiver(track, { direction: "sendonly", streams: [s.stream] });
+      else p.addTrack(track, s.stream);
+    }
+    s.voiceTransceiver = p.addTransceiver("audio", { direction: "sendrecv" });
+    voice.attach(s.voiceTransceiver.sender);
     state("videoState", "Kamera B infångad · ansluter");
     await p.setLocalDescription(await p.createOffer());
     if (active(s)) send({ type: "offer", sdp: p.localDescription.sdp });
@@ -254,6 +273,20 @@ async function message(m) {
     const p = peer(s);
     await p.setRemoteDescription({ type: m.type, sdp: m.sdp });
     if (!active(s)) return;
+    if (m.type === "offer") {
+      const audio = p
+        .getTransceivers()
+        .filter((t) => t.receiver.track.kind === "audio");
+      const talk = audio.at(-1);
+      if (talk) {
+        talk.direction = "sendrecv";
+        voice.attach(talk.sender);
+      }
+      if (audio.length > 1)
+        document.querySelector("#gameAudio").srcObject = new MediaStream([
+          audio[0].receiver.track,
+        ]);
+    }
     for (const candidate of s.pending) {
       await p.addIceCandidate(candidate);
       if (!active(s)) return;
@@ -273,7 +306,7 @@ function sendInput(input) {
   if (
     s?.role === "guest" &&
     s.channel?.readyState === "open" &&
-    s.channel.bufferedAmount < 65536
+    s.channel.bufferedAmount < (input.type === "motion" ? 2048 : 8192)
   ) {
     const data = JSON.stringify(input);
     if (data.length <= 4096) s.channel.send(data);
@@ -321,10 +354,14 @@ function connect() {
     setTimeout(connect, 3000);
   };
 }
-create.onclick = () => {
+bindAction(create, () => {
   buttons(true);
   send({ type: "create" });
-};
+});
+bindAction(join.querySelector("button"), (e) => {
+  e.preventDefault();
+  join.requestSubmit();
+});
 join.onsubmit = (e) => {
   e.preventDefault();
   const code = $("code").value.trim();
@@ -333,9 +370,21 @@ join.onsubmit = (e) => {
     send({ type: "join", code });
   }
 };
-leave.onclick = () => finish("Lämnar matchen…");
+bindAction(leave, () => finish("Lämnar matchen…"));
 window.KanonLobby = {
   sendInput,
+  sendState(state) {
+    const s = session;
+    if (
+      s?.role === "host" &&
+      s.channel?.readyState === "open" &&
+      s.channel.bufferedAmount < 4096
+    )
+      s.channel.send(JSON.stringify({ type: "state", state }));
+  },
+  leaveMatch() {
+    finish("Tillbaka till lobbyn…");
+  },
   get bitrateKbps() {
     return session?.bitrate || 0;
   },

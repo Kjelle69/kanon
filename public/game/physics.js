@@ -66,6 +66,7 @@ export class DestructionWorld {
     this.blocks = [];
     this.bonds = [];
     this.projectiles = [];
+    this.nextShot = 1;
     this.onEvent = onEvent;
     this.fracture = fracture;
     this.time = 0;
@@ -81,6 +82,7 @@ export class DestructionWorld {
     this.lastImpact = null;
     const floor = new C.Body({ mass: 0, shape: new C.Plane() });
     floor.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+    floor.aabbNeedsUpdate = true;
     this.world.addBody(floor);
   }
   addBlock({
@@ -349,7 +351,15 @@ export class DestructionWorld {
     // Ball contact is resolved by a conservative swept sphere before each step;
     // rubble contacts themselves use Cannon's complete rigid-body solver.
     this.world.addBody(body);
-    const shot = { body, owner, ammo, ...spec, age: 0, hit: false };
+    const shot = {
+      id: this.nextShot++,
+      body,
+      owner,
+      ammo,
+      ...spec,
+      age: 0,
+      hit: false,
+    };
     this.projectiles.push(shot);
     return shot;
   }
@@ -358,7 +368,11 @@ export class DestructionWorld {
     this.droppedTime += Math.max(0, seconds - accepted);
     this.accumulator += accepted;
     let count = 0;
-    while (this.accumulator + 1e-9 >= FIXED_DT && count < 6) {
+    while (
+      this.accumulator + 1e-9 >= FIXED_DT &&
+      count < 6 &&
+      !this.characters?.damage.ended
+    ) {
       this.step();
       this.accumulator -= FIXED_DT;
       count++;
@@ -381,7 +395,19 @@ export class DestructionWorld {
         to.y < shot.radius
           ? Math.max(0, (from.y - shot.radius) / (from.y - to.y))
           : Infinity;
-      if (first && first.t <= floorT) {
+      const person = this.characters?.sweep(from, to, shot.radius);
+      if (person && person.t <= (first?.t ?? Infinity) && person.t <= floorT) {
+        const point = new C.Vec3();
+        from.lerp(to, person.t, point);
+        this.characters.resolve(shot, point, person.player);
+        this.onEvent({
+          type: "impact",
+          point,
+          energy: 0.5 * shot.mass * shot.body.velocity.lengthSquared(),
+          block: null,
+        });
+        shot.hit = true;
+      } else if (first && first.t <= floorT) {
         const point = new C.Vec3();
         from.lerp(to, first.t, point);
         shot.body.position.copy(point);
@@ -393,11 +419,13 @@ export class DestructionWorld {
           shot.radius,
           first.normal,
         );
+        this.characters?.resolve(shot, point);
         shot.hit = true;
       } else if (floorT <= 1) {
         const point = new C.Vec3();
         from.lerp(to, floorT, point);
         point.y = 0;
+        this.characters?.resolve(shot, point);
         this.onEvent({
           type: "impact",
           point,
@@ -419,6 +447,7 @@ export class DestructionWorld {
     for (let pass = 0; this.dirty && pass < 4; pass++) this.evaluateSupport();
     this.world.step(FIXED_DT);
     this.time += FIXED_DT;
+    this.characters?.afterStep();
     this.steps++;
     for (const hit of this.impacts.splice(0, 24)) {
       if (hit.block?.state === "supported")

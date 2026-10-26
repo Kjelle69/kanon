@@ -19,6 +19,8 @@ test("guest space fires without pausing video; text focus and arrows respect gam
     await expect(guest.locator("#channelState")).toHaveText("Öppen", {
       timeout: 45000,
     });
+    await expect(guest.locator("#interactBtn")).toBeEnabled();
+    await guest.locator("#interactBtn").click();
     const video = guest.locator("#remote");
     await expect
       .poll(
@@ -55,6 +57,7 @@ test("guest space fires without pausing video; text focus and arrows respect gam
       .poll(() => host.evaluate(() => window.KanonGame.snapshot().ammo[1]))
       .toBe("light");
     await video.click();
+    await guest.keyboard.press("Escape");
     await expect(video).toBeFocused();
     const before = await host.evaluate(
       () => window.KanonGame.snapshot().effects.shots,
@@ -92,15 +95,11 @@ test("guest space fires without pausing video; text focus and arrows respect gam
     const scroll = await guest.evaluate(() => window.scrollY);
     await guest.keyboard.down("ArrowRight");
     await expect
-      .poll(() =>
-        host.evaluate(() => window.KanonGame.snapshot().keys["g:arrowright"]),
-      )
+      .poll(() => host.evaluate(() => window.KanonGame.snapshot().keys["g:d"]))
       .toBe(true);
     await guest.keyboard.up("ArrowRight");
     await expect
-      .poll(() =>
-        host.evaluate(() => window.KanonGame.snapshot().keys["g:arrowright"]),
-      )
+      .poll(() => host.evaluate(() => window.KanonGame.snapshot().keys["g:d"]))
       .toBe(false);
     expect(await guest.evaluate(() => window.scrollY)).toBe(scroll);
     // Lobby input, textarea, and contenteditable receive their native keys, with no game messages.
@@ -119,7 +118,13 @@ test("guest space fires without pausing video; text focus and arrows respect gam
       await guest.keyboard.press("Space");
       await guest.keyboard.press("ArrowLeft");
       await guest.keyboard.press("w");
-      expect(await guest.evaluate(() => window.commands)).toEqual([]);
+      expect(
+        await guest.evaluate(() =>
+          window.commands.filter(
+            (m) => m.type !== "motion" || m.x || m.z || m.lookX || m.lookY,
+          ),
+        ),
+      ).toEqual([]);
     }
     expect(await guest.evaluate(() => window.pauseCount)).toBe(0);
     expect(await video.evaluate((v) => v.paused)).toBe(false);

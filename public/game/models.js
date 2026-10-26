@@ -67,8 +67,14 @@ export function loadModels() {
       const response = await fetch("/assets/models/cannonball.fbx", {
         method: "HEAD",
       });
-      if (response.ok) {
-        ball = await new FBXLoader().loadAsync("/assets/models/cannonball.fbx");
+      const glb =
+        !response.ok &&
+        (await fetch("/assets/models/cannonball.glb", { method: "HEAD" })).ok;
+      if (response.ok || glb) {
+        ball = glb
+          ? (await new GLTFLoader().loadAsync("/assets/models/cannonball.glb"))
+              .scene
+          : await new FBXLoader().loadAsync("/assets/models/cannonball.fbx");
         const box = new THREE.Box3().setFromObject(ball),
           size = box.getSize(new THREE.Vector3()),
           center = box.getCenter(new THREE.Vector3());
@@ -82,7 +88,7 @@ export function loadModels() {
         ball.traverse((o) => {
           o.userData.sharedAsset = true;
         });
-        ballStatus = "FBX";
+        ballStatus = glb ? "cannonball.glb" : "FBX";
       }
     } catch (error) {
       ball = null;
@@ -116,4 +122,53 @@ export function createCannonVisual(assets) {
     model: "cannon.glb",
     parts: assets.parts.length,
   };
+}
+
+let characterCache;
+export function loadCharacter() {
+  if (!characterCache)
+    characterCache = (async () => {
+      // Accept the supplied filename while supporting the requested canonical name.
+      let url = "/assets/models/MrTrebuchet.glb";
+      if (!(await fetch(url, { method: "HEAD" })).ok)
+        url = "/assets/models/MrTreb.glb";
+      const gltf = await new GLTFLoader().loadAsync(url);
+      const remove = [];
+      gltf.scene.traverse((o) => {
+        if (o.isMesh && o.material?.name?.includes("dark_display_base"))
+          remove.push(o);
+      });
+      remove.forEach((o) => o.removeFromParent());
+      gltf.scene.rotation.y = Math.PI / 2;
+      const root = new THREE.Group();
+      root.add(gltf.scene);
+      const box = new THREE.Box3().setFromObject(root),
+        size = box.getSize(new THREE.Vector3());
+      const scale = 1.7 / size.y;
+      gltf.scene.position.set(
+        -(box.min.x + box.max.x) / 2,
+        -box.min.y,
+        -(box.min.z + box.max.z) / 2,
+      );
+      root.scale.setScalar(scale);
+      // Model front is +Z; turn to canonical +X. Keep source untouched.
+      root.traverse((o) => {
+        o.userData.sharedAsset = true;
+        if (o.isMesh) {
+          if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
+          const materials = Array.isArray(o.material)
+            ? o.material
+            : [o.material];
+          for (const m of materials) {
+            if ("metalness" in m)
+              m.metalness = Math.max(0, Math.min(0.65, m.metalness));
+          }
+        }
+      });
+      return { root, url, height: 1.7 };
+    })().catch((e) => {
+      characterCache = null;
+      throw e;
+    });
+  return characterCache;
 }
