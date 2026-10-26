@@ -47,3 +47,7 @@ Se [v0.5-dokumentationen](docs/v0.5.md) och [prestandarapporten](docs/performanc
 Modellen saknar rigg/animationer; kroppen följer fysiken men har ingen gånganimation. Kapselkontrollen saknar hopp och särskild trapp-/klättringslogik. Ljudet är en fungerande första procedurgenererad integration, inte färdiga inspelade ljudeffekter eller full akustiksimulering. Fysiska telefoner, Safari, mikrofon/eko och två externa nät behöver slutprovas.
 
 Murverk använder stöd-/lastgraf och rigidbodies, inte full materialmekanik. Små kosmetiska splitter ger ingen skada; godtycklig meshfragmentering återstår. ICE/STUN/TURN har inte ändrats. Om TURN behövs ska det ligga utanför Pi:n, så att spelmedia fortsatt inte passerar Pi-servern.
+
+## WebRTC-latens
+
+Panelen **WebRTC · latens och historik** mäter varannan sekund och kan exportera sex minuters historik från båda spelarna. Mätning, A/B-prov, tiominuterskontroller och begränsningar för Edge/Windows finns i [docs/rtc-latency.md](docs/rtc-latency.md). Spelljud och video använder separata synkgrupper på samma PeerConnection för lägre videofördröjning; exakt A/V-synk prioriteras ned.

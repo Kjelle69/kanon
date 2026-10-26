@@ -11,3 +11,5 @@ button{touch-action:manipulation}
 @media(pointer:coarse){#mobileControls{position:absolute;bottom:8px;left:8px;right:8px;justify-content:space-between;margin:0;pointer-events:none}#mobileControls>*{pointer-events:auto;opacity:.8}#joystick{width:90px;height:90px}#joystickKnob{width:32px;height:32px;left:27px;top:27px}#lookPad{width:110px;height:90px;padding:8px;font-size:12px}#reticle{top:50%}#mobileTalkBtn{display:block;position:absolute;top:5px;right:5px;touch-action:none;opacity:.8}}
 
 canvas,video{height:auto}
+
+#rtcHistory{max-height:220px;overflow:auto}

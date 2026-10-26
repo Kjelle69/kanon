@@ -77,6 +77,18 @@ test("v0.5 independent characters, pointer lock, authoritative damage, audio, PT
       .poll(() => guest.locator("#hpText1").textContent())
       .toBe("100 HP");
     expect((await snap(guest)).hasSimulation).toBe(false);
+    expect(
+      await host.evaluate(() => {
+        const sections =
+          window.__peers[0].localDescription.sdp.split(/\r\n(?=m=)/);
+        const id = (kind) =>
+          sections
+            .find((s) => s.startsWith("m=" + kind))
+            ?.match(/a=msid:([^\s]+)/)?.[1];
+        return !!id("video") && !!id("audio") && id("video") !== id("audio");
+      }),
+    ).toBe(true);
+
     await host.evaluate(() => {
       window.__visibility = [];
       const g = window.__testScene;

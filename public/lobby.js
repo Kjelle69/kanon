@@ -1,4 +1,5 @@
 import "./game/streaminglab.js";
+import { RtcDiagnostics, renderDiagnostics } from "./game/rtc-diagnostics.js";
 import { bindAction } from "./game/ui.js";
 import { voice } from "./game/voice.js";
 const $ = (id) => document.getElementById(id);
@@ -35,10 +36,11 @@ function dispose() {
     s.stopped = true;
     clearTimeout(s.timer);
     clearTimeout(s.disconnectTimer);
-    clearInterval(s.statsTimer);
+    s.diagnostics?.dispose();
     s.channel?.close();
     s.pc?.close();
     s.stream?.getTracks().forEach((t) => t.stop());
+    s.gameAudioStream = null;
   }
   window.KanonGame.onDisconnect();
   video.srcObject = null;
@@ -97,6 +99,7 @@ function wireChannel(s, c) {
       return;
     try {
       const message = JSON.parse(event.data);
+      if (s.diagnostics?.message(message)) return;
       if (s.role === "host") window.KanonGame.onInput(message);
       else if (message.type === "state")
         window.KanonGame.onState(message.state);
@@ -117,36 +120,18 @@ function peer(s) {
   const p = (s.pc = new RTCPeerConnection(config));
   state("rtcState", "Ansluter");
   s.bitrate = 0;
-  s.statsTimer = setInterval(async () => {
-    if (!active(s) || s.readingStats) return;
-    s.readingStats = true;
-    try {
-      const stats = await p.getStats();
+  s.diagnostics = new RtcDiagnostics(
+    p,
+    video,
+    s.role,
+    () => s.channel,
+    (row, history) => {
       if (!active(s)) return;
-      let bytes = 0,
-        stamp = 0;
-      for (const r of stats.values())
-        if (
-          r.kind === "video" &&
-          r.type === (s.role === "host" ? "outbound-rtp" : "inbound-rtp")
-        ) {
-          bytes += r.bytesSent ?? r.bytesReceived ?? 0;
-          stamp = Math.max(stamp, r.timestamp);
-        }
-      if (s.previousStats && stamp > s.previousStats.stamp)
-        s.bitrate = Math.max(
-          0,
-          ((bytes - s.previousStats.bytes) * 8) /
-            (stamp - s.previousStats.stamp),
-        );
-      s.previousStats = { bytes, stamp };
+      s.bitrate = row.bitrateKbps ?? 0;
       state("bitrateState", s.bitrate.toFixed(0) + " kbit/s");
-    } catch {
-      /* Closing a connection may invalidate an outstanding stats read. */
-    } finally {
-      s.readingStats = false;
-    }
-  }, 1500);
+      renderDiagnostics(row, history);
+    },
+  );
   p.onicecandidate = (e) => {
     if (active(s) && e.candidate)
       send({ type: "ice", candidate: e.candidate.toJSON() });
@@ -260,9 +245,15 @@ async function message(m) {
     wireChannel(s, p.createDataChannel("controls", { ordered: true }));
     s.stream = window.KanonGame.getGuestStream();
     for (const track of s.stream.getTracks()) {
-      if (track.kind === "audio")
-        p.addTransceiver(track, { direction: "sendonly", streams: [s.stream] });
-      else p.addTrack(track, s.stream);
+      if (track.kind === "audio") {
+        // Separate elements play game audio and video. A shared MSID also
+        // couples their RTP playout clocks and can add avoidable video delay.
+        s.gameAudioStream = new MediaStream([track]);
+        p.addTransceiver(track, {
+          direction: "sendonly",
+          streams: [s.gameAudioStream],
+        });
+      } else p.addTrack(track, s.stream);
     }
     s.voiceTransceiver = p.addTransceiver("audio", { direction: "sendrecv" });
     voice.attach(s.voiceTransceiver.sender);
@@ -373,6 +364,9 @@ join.onsubmit = (e) => {
 bindAction(leave, () => finish("Lämnar matchen…"));
 window.KanonLobby = {
   sendInput,
+  get diagnostics() {
+    return session?.diagnostics?.history ?? [];
+  },
   sendState(state) {
     const s = session;
     if (
@@ -401,3 +395,16 @@ window.KanonLobby = {
   },
 };
 connect();
+
+document.querySelector("#exportRtc").onclick = () => {
+  const blob = new Blob(
+    [JSON.stringify(window.KanonLobby.diagnostics, null, 2)],
+    { type: "application/json" },
+  );
+  const url = URL.createObjectURL(blob),
+    a = document.createElement("a");
+  a.href = url;
+  a.download = "kanon-rtc.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};

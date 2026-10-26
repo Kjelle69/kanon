@@ -121,7 +121,9 @@ test("guest space fires without pausing video; text focus and arrows respect gam
       expect(
         await guest.evaluate(() =>
           window.commands.filter(
-            (m) => m.type !== "motion" || m.x || m.z || m.lookX || m.lookY,
+            (m) =>
+              !m.type.startsWith("diag-") &&
+              (m.type !== "motion" || m.x || m.z || m.lookX || m.lookY),
           ),
         ),
       ).toEqual([]);
