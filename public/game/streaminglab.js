@@ -130,28 +130,31 @@ $("heavyBtn").onclick = () => setAmmo("heavy");
 $("stressBtn").onclick = () => {
   if (role === "host") game?.stress();
 };
-document.addEventListener("keydown", (e) => {
-  if (
-    !role ||
-    ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName) ||
-    e.target.isContentEditable
-  )
-    return;
-  const key = e.key.toLowerCase();
-  if (!controlKeys.has(key) && key !== " ") return;
-  if (key === " " && e.target.tagName === "BUTTON") return;
-  e.preventDefault();
-  if (key === " ") {
-    if (!e.repeat) fire();
-    return;
-  }
-  if (keys[key]) return;
-  keys[key] = true;
-  if (role === "guest") sendInput({ type: "key", key, down: true });
-});
+window.addEventListener(
+  "keydown",
+  (e) => {
+    if (
+      !role ||
+      ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName) ||
+      e.target.isContentEditable
+    )
+      return;
+    const key = e.key.toLowerCase();
+    if (!controlKeys.has(key) && key !== " ") return;
+    e.preventDefault();
+    if (key === " ") {
+      if (!e.repeat) fire();
+      return;
+    }
+    if (keys[key]) return;
+    keys[key] = true;
+    if (role === "guest") sendInput({ type: "key", key, down: true });
+  },
+  { capture: true },
+);
 document.addEventListener("keyup", (e) => {
   const key = e.key.toLowerCase();
-  if (!controlKeys.has(key)) return;
+  if (!controlKeys.has(key) || !keys[key]) return;
   keys[key] = false;
   if (role === "guest") sendInput({ type: "key", key, down: false });
 });
@@ -184,3 +187,16 @@ for (const button of document.querySelectorAll("[data-key]")) {
   for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
     button.addEventListener(event, release);
 }
+
+// The video is a game viewport, never a native media-control keyboard target.
+V.addEventListener("click", () => {
+  V.focus();
+  if (V.paused) V.play().catch(() => {});
+});
+document.addEventListener("focusin", (e) => {
+  if (
+    ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName) ||
+    e.target.isContentEditable
+  )
+    releaseKeys();
+});

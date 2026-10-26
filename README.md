@@ -26,7 +26,7 @@ Välj **Skapa spel** eller ange matchkoden och välj **Anslut till spel**. Sikta
 npm ci
 npm run assets             # återställ lokala loaders, fysikmodul och extraherade texturer
 npm test                   # server + fysik, 12 tester
-npm run test:e2e           # riktiga Chromium/WebGL/WebRTC-tester, 5 tester
+npm run test:e2e           # riktiga Chromium/WebGL/WebRTC-tester, 6 tester
 npm run benchmark:physics  # reproducerbart fysikprov med två borgar
 ```
 

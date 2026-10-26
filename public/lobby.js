@@ -182,7 +182,8 @@ function peer(s) {
       if (active(s)) state("videoState", "Avslutad");
     };
     video.play().catch(() => {
-      if (active(s)) state("videoState", "Tryck på videons uppspelningsknapp");
+      if (active(s))
+        state("videoState", "Tryck på videon för att starta uppspelningen");
     });
   };
   p.ondatachannel = (e) => {
